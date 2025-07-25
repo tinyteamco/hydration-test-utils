@@ -23,11 +23,11 @@ Testing complex application states often requires clicking through multiple UI s
 ## Installation
 
 ```bash
-npm install @your-org/hydration-test-utils
+npm install @tinyteam/hydration-test-utils
 # or
-yarn add @your-org/hydration-test-utils
+yarn add @tinyteam/hydration-test-utils
 # or
-pnpm add @your-org/hydration-test-utils
+pnpm add @tinyteam/hydration-test-utils
 ```
 
 ## Quick Start
@@ -35,7 +35,7 @@ pnpm add @your-org/hydration-test-utils
 ### 1. Write a test with hydrated state (Playwright)
 
 ```typescript
-import { hydratePage } from '@your-org/hydration-test-utils/playwright';
+import { hydratePage } from '@tinyteam/hydration-test-utils/playwright';
 
 test('admin user can edit settings', async ({ page }) => {
   // Inject test state and navigate to your app
@@ -72,7 +72,7 @@ First, define your atoms and validation schemas:
 // hydration-setup.ts
 import { z } from 'zod';
 import { atom } from 'jotai';
-import type { HydrationRegistry } from '@your-org/hydration-test-utils';
+import type { HydrationRegistry } from '@tinyteam/hydration-test-utils';
 
 // Define your schemas
 const userSchema = z.object({
@@ -106,7 +106,7 @@ Then bootstrap hydration in your app:
 
 ```typescript
 // main.tsx or app.tsx
-import { bootstrapHydration } from '@your-org/hydration-test-utils';
+import { bootstrapHydration } from '@tinyteam/hydration-test-utils';
 import { hydrationRegistry } from './hydration-setup';
 
 // Before rendering your app
@@ -162,7 +162,7 @@ test('remembers user preferences', async ({ page }) => {
 
 ```typescript
 // Cypress
-import { createHydrationBlob } from '@your-org/hydration-test-utils';
+import { createHydrationBlob } from '@tinyteam/hydration-test-utils';
 
 it('loads admin dashboard', () => {
   const blob = createHydrationBlob({
@@ -187,7 +187,7 @@ The library provides two primary APIs for different use cases:
 **Playwright-specific helper** that handles the complete hydration flow:
 
 ```typescript
-import { hydratePage } from '@your-org/hydration-test-utils/playwright';
+import { hydratePage } from '@tinyteam/hydration-test-utils/playwright';
 
 test('user can access admin panel', async ({ page }) => {
   await hydratePage(page, {
@@ -214,7 +214,7 @@ test('user can access admin panel', async ({ page }) => {
 
 ```typescript
 // In your app's entry point (main.tsx)
-import { bootstrapHydration } from '@your-org/hydration-test-utils';
+import { bootstrapHydration } from '@tinyteam/hydration-test-utils';
 import { hydrationRegistry } from './hydration-setup';
 
 // Before rendering
@@ -403,7 +403,7 @@ export const userSchema = z.object({
 export type User = z.infer<typeof userSchema>;
 
 // hydration-registry.ts
-import type { HydrationRegistry, HydrationRegistryEntry } from '@your-org/hydration-test-utils';
+import type { HydrationRegistry, HydrationRegistryEntry } from '@tinyteam/hydration-test-utils';
 import type { User } from './types';
 
 // Type-safe registry entry

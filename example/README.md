@@ -64,7 +64,7 @@ This example blob contains:
 You can create hydration blobs using the library's API:
 
 ```javascript
-import { createHydrationBlob } from '@your-org/hydration-test-utils';
+import { createHydrationBlob } from '@tinyteam/hydration-test-utils';
 
 const blob = await createHydrationBlob({
   userProfile: {

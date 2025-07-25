@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hydration Test Utils Example (With Hydration)</title>
+    <script>
+      // Example: Set a hydration blob on window before the app loads
+      // This blob contains user profile and settings data
+      // In a real app, this would be injected by the server
+      window.__HYDRATION_BLOB__ = 'eyJ1c2VyUHJvZmlsZSI6eyJuYW1lIjoiSm9obiBEb2UiLCJlbWFpbCI6ImpvaG5AZXhhbXBsZS5jb20iLCJhZ2UiOjMwfSwic2V0dGluZ3MiOnsidGhlbWUiOiJkYXJrIiwibm90aWZpY2F0aW9uc0VuYWJsZWQiOnRydWV9fQ';
+      
+      // The blob decodes to:
+      // {
+      //   "userProfile": {
+      //     "name": "John Doe",
+      //     "email": "john@example.com",
+      //     "age": 30
+      //   },
+      //   "settings": {
+      //     "theme": "dark",
+      //     "notificationsEnabled": true
+      //   }
+      // }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

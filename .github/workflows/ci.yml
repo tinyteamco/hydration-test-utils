@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install root dependencies
+      run: npm ci
+
+    - name: Build the library
+      run: npm run build
+
+    - name: Run library unit tests
+      run: npm test
+
+    - name: Install example app dependencies
+      run: npm ci
+      working-directory: ./example
+
+    - name: Install Playwright browsers for example app
+      run: npx playwright install --with-deps
+      working-directory: ./example
+
+    - name: Run example app E2E tests
+      run: npm test
+      working-directory: ./example

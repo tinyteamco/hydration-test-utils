@@ -1,4 +1,4 @@
-# @tinyteam/hydration-test-utils  
+# @tinyteamco/hydration-test-utils  
 **Reusable library for injecting typed test state into a Jotai-based application**  
 
 ---
@@ -57,7 +57,7 @@ Core components:
 
 ## Public API
 
-All exports come from `@tinyteam/hydration-test-utils`.
+All exports come from `@tinyteamco/hydration-test-utils`.
 
 | Export | Signature | Purpose |
 |--------|-----------|---------|

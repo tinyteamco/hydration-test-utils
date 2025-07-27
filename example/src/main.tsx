@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Provider, createStore } from 'jotai'
-import { bootstrapHydration } from '@tinyteam/hydration-test-utils'
+import { bootstrapHydration } from '@tinyteamco/hydration-test-utils'
 import App from './App'
 import { hydrationRegistry } from './hydration-setup'
 import { hydrationStatusAtom } from './atoms'

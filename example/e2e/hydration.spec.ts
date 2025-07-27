@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { createHydrationBlob } from '@tinyteam/hydration-test-utils';
+import { createHydrationBlob } from '@tinyteamco/hydration-test-utils';
 import {
   hydratePage,
   getHydrationResult,
   preparePageForHydration,
-} from '@tinyteam/hydration-test-utils/playwright';
+} from '@tinyteamco/hydration-test-utils/playwright';
 
 test.describe('Hydration Test Utils E2E', () => {
   test('should inject valid data for all sections', async ({ page }) => {

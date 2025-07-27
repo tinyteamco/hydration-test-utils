@@ -1,5 +1,5 @@
 {
-  "name": "@tinyteam/hydration-test-utils",
+  "name": "@tinyteamco/hydration-test-utils",
   "version": "0.1.0",
   "description": "Type-safe test state hydration for Jotai applications with Zod validation",
   "main": "./dist/index.js",
@@ -50,11 +50,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/tinyteam/hydration-test-utils.git"
+    "url": "https://github.com/tinyteamco/hydration-test-utils.git"
   },
-  "homepage": "https://github.com/tinyteam/hydration-test-utils#readme",
+  "homepage": "https://github.com/tinyteamco/hydration-test-utils#readme",
   "bugs": {
-    "url": "https://github.com/tinyteam/hydration-test-utils/issues"
+    "url": "https://github.com/tinyteamco/hydration-test-utils/issues"
   },
   "dependencies": {
     "jotai": "^2.12.5",

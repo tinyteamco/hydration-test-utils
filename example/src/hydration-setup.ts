@@ -1,4 +1,4 @@
-import type { HydrationRegistry } from '@tinyteam/hydration-test-utils'
+import type { HydrationRegistry } from '@tinyteamco/hydration-test-utils'
 import { z } from 'zod'
 import {
   userNameAtom,

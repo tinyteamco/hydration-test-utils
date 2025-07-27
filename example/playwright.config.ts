@@ -22,7 +22,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: `vite preview --port ${port}`,
+    command: `vite dev --port ${port}`,
     port,
     reuseExistingServer: false,
     stdout: 'pipe',

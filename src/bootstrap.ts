@@ -26,9 +26,8 @@ interface ExtendedBootstrapOptions extends BootstrapOptions {
 
 // Type for global window object
 interface HydrationWindow {
-  __HYDRATION_BLOB__?: string;
+  __HYDRATION_BLOBS__?: Array<{ blob: string; storageKey: string }>;
   __HYDRATION_RESULT__?: HydrationResult;
-  __HYDRATION_STORAGE_KEY__?: string;
   localStorage?: Storage;
 }
 
@@ -85,20 +84,26 @@ export async function bootstrapHydration(
   logger.info?.('Starting bootstrap hydration');
 
   try {
-    // Step 1: Discover blob
-    let blob: string | undefined = options?.blob;
+    // Step 1: Discover blobs
+    let blobs: Array<{ blob: string; storageKey: string }> = [];
     let blobSource: string | undefined;
     
-    if (!blob && typeof globalThis !== 'undefined' && (globalThis as any).window) {
-      const win = (globalThis as any).window as HydrationWindow;
+    if (options?.blob) {
+      // If explicit blob provided, use only that
+      blobs = [{ blob: options.blob, storageKey: `__hydration_${hashBlob(options.blob)}` }];
+      blobSource = 'explicit option';
+    } else if (typeof globalThis !== 'undefined' && (globalThis as any).window) {
+      const win = (globalThis as any).window as HydrationWindow & { 
+        __HYDRATION_BLOBS__?: Array<{ blob: string; storageKey: string }> 
+      };
       
-      // Check for blob on window
-      if (win.__HYDRATION_BLOB__) {
-        blob = win.__HYDRATION_BLOB__;
-        blobSource = 'window.__HYDRATION_BLOB__';
-        // Clear the blob after consuming it
-        win.__HYDRATION_BLOB__ = undefined;
-        logger.info?.('Consumed window.__HYDRATION_BLOB__');
+      // Check for blobs array on window
+      if (win.__HYDRATION_BLOBS__ && win.__HYDRATION_BLOBS__.length > 0) {
+        blobs = win.__HYDRATION_BLOBS__;
+        blobSource = 'window.__HYDRATION_BLOBS__';
+        // Clear the blobs after consuming them
+        win.__HYDRATION_BLOBS__ = [];
+        logger.info?.(`Consumed ${blobs.length} blobs from window.__HYDRATION_BLOBS__`);
       } 
       // Check URL query string for 'hydrate' parameter
       else if (typeof globalThis !== 'undefined' && (globalThis as any).window?.location?.href) {
@@ -106,23 +111,21 @@ export async function bootstrapHydration(
           const url = new URL((globalThis as any).window.location.href);
           const hydrateParam = url.searchParams.get('hydrate');
           if (hydrateParam) {
-            blob = hydrateParam;
+            blobs = [{ blob: hydrateParam, storageKey: `__hydration_${hashBlob(hydrateParam)}` }];
             blobSource = 'URL parameter "hydrate"';
           }
         } catch (error) {
           logger.warn?.('Failed to parse URL for hydrate parameter', error);
         }
       }
-    } else if (blob) {
-      blobSource = 'explicit option';
     }
     
-    if (!blob) {
-      logger.info?.('No hydration blob found, skipping hydration');
+    if (blobs.length === 0) {
+      logger.info?.('No hydration blobs found, skipping hydration');
       return undefined;
     }
     
-    logger.info?.(`Found hydration blob from ${blobSource}`);
+    logger.info?.(`Found ${blobs.length} hydration blob(s) from ${blobSource}`);
 
     // Step 2: Wait for persisted atoms
     logger.info?.('Waiting for persisted atoms to load');
@@ -131,42 +134,60 @@ export async function bootstrapHydration(
     });
     logger.info?.('Persisted atoms loaded successfully');
 
-    // Step 3: Hydrate from blob
-    logger.info?.('Starting hydration from blob');
-    const result = await hydrateFromEncodedBlob(blob, registry, {
-      strict: options?.strict,
-      logger: options?.logger,
-      _testStore: options?._testStore
-    } as any);
+    // Step 3: Hydrate from blobs in sequence
+    let aggregatedResult: HydrationResult = {
+      sections: {},
+      overallSuccess: true
+    };
 
-    // Step 4: Expose result on window and mark hydration as complete
-    if (typeof globalThis !== 'undefined' && (globalThis as any).window) {
-      const win = (globalThis as any).window as HydrationWindow;
-      win.__HYDRATION_RESULT__ = result;
-      logger.info?.('Hydration result exposed on window.__HYDRATION_RESULT__');
+    for (let i = 0; i < blobs.length; i++) {
+      const blobItem = blobs[i];
+      if (!blobItem) continue; // TypeScript safety check
+      const { blob, storageKey } = blobItem;
       
-      // Mark this specific hydration as complete in localStorage
-      if (blob && result.overallSuccess && blobSource === 'window.__HYDRATION_BLOB__') {
-        const storageKey = `__hydration_${hashBlob(blob)}`;
-        win.__HYDRATION_STORAGE_KEY__ = storageKey; // Store for debugging
-        
-        try {
-          if (typeof win.localStorage !== 'undefined') {
-            win.localStorage.setItem(storageKey, 'true');
-            logger.info?.(`Marked hydration as complete: ${storageKey}`);
-          } else {
-            logger.warn?.('localStorage is not available on window');
-          }
-        } catch (e) {
-          logger.warn?.('Failed to mark hydration in localStorage:', e);
+      // Check if this blob was already hydrated
+      if (typeof globalThis !== 'undefined' && (globalThis as any).window?.localStorage) {
+        const alreadyHydrated = (globalThis as any).window.localStorage.getItem(storageKey);
+        if (alreadyHydrated) {
+          logger.info?.(`Blob ${i + 1}/${blobs.length} already hydrated (${storageKey}), skipping`);
+          continue;
         }
-      } else {
-        logger.info?.(`Skipping localStorage: blob=${!!blob}, success=${result.overallSuccess}, source=${blobSource}`);
+      }
+
+      logger.info?.(`Hydrating blob ${i + 1}/${blobs.length}`);
+      const result = await hydrateFromEncodedBlob(blob, registry, {
+        strict: options?.strict,
+        logger: options?.logger,
+        _testStore: options?._testStore
+      } as any);
+
+      // Aggregate results
+      // For sections: later results overwrite earlier ones
+      Object.assign(aggregatedResult.sections, result.sections);
+      
+      // Overall success is true only if all hydrations succeed
+      aggregatedResult.overallSuccess = aggregatedResult.overallSuccess && result.overallSuccess;
+
+      // Mark this blob as hydrated if successful
+      if (result.overallSuccess && typeof globalThis !== 'undefined' && (globalThis as any).window?.localStorage) {
+        try {
+          (globalThis as any).window.localStorage.setItem(storageKey, 'true');
+          logger.info?.(`Marked blob as hydrated: ${storageKey}`);
+        } catch (e) {
+          logger.warn?.('Failed to mark blob in localStorage:', e);
+        }
       }
     }
 
-    logger.info?.('Bootstrap hydration complete', { overallSuccess: result.overallSuccess });
-    return result;
+    // Step 4: Expose aggregated result on window
+    if (typeof globalThis !== 'undefined' && (globalThis as any).window) {
+      const win = (globalThis as any).window as HydrationWindow;
+      win.__HYDRATION_RESULT__ = aggregatedResult;
+      logger.info?.('Aggregated hydration result exposed on window.__HYDRATION_RESULT__');
+    }
+
+    logger.info?.('Bootstrap hydration complete', { overallSuccess: aggregatedResult.overallSuccess });
+    return aggregatedResult;
   } catch (error) {
     logger.error?.('Failed to bootstrap hydration', error);
     

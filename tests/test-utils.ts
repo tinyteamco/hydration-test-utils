@@ -45,6 +45,7 @@ export function createTestAtoms() {
     idAtom: createMockAtom<string>(''),
     emailAtom: createMockAtom<string>(''),
     preferencesAtom: createMockAtom<{ notifications: boolean }>({ notifications: false }),
+    autoSaveAtom: createMockAtom<boolean>(true),
   };
 }
 

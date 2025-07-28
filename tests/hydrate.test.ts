@@ -775,6 +775,258 @@ describe('hydrateFromEncodedBlob', () => {
     });
   });
 
+  describe('multiple hydration calls', () => {
+    it('should support multiple hydrate calls with non-overlapping data', async () => {
+      // Arrange
+      const userSchema = z.object({
+        name: z.string(),
+        age: z.number(),
+      });
+
+      const settingsSchema = z.object({
+        theme: z.string(),
+        notifications: z.boolean(),
+      });
+
+      const registry: HydrationRegistry = {
+        user: {
+          schema: userSchema,
+          atoms: {
+            name: testAtoms.nameAtom,
+            age: testAtoms.ageAtom,
+          },
+        },
+        settings: {
+          schema: settingsSchema,
+          atoms: {
+            theme: testAtoms.themeAtom,
+            notifications: testAtoms.notificationsAtom,
+          },
+        },
+      };
+
+      // First hydration blob with only user data
+      const firstData = {
+        user: {
+          name: 'John Doe',
+          age: 30,
+        },
+      };
+      const firstBlob = createHydrationBlob(firstData);
+
+      // Second hydration blob with only settings data
+      const secondData = {
+        settings: {
+          theme: 'dark',
+          notifications: true,
+        },
+      };
+      const secondBlob = createHydrationBlob(secondData);
+
+      // Act - First hydration
+      const firstResult = await hydrateFromEncodedBlob(firstBlob, registry, {
+        logger,
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Check first hydration result
+      expect(firstResult.overallSuccess).toBe(true);
+      expect(firstResult.sections.user).toEqual({
+        success: true,
+        appliedFields: ['name', 'age'],
+      });
+      // settings section should not be present in first result
+      expect(firstResult.sections.settings).toBeUndefined();
+
+      // Verify atoms after first hydration
+      let setOps = atomStore.getSetOperations();
+      expect(setOps).toHaveLength(2);
+      expect(setOps.find(op => op.atom === testAtoms.nameAtom)?.value).toBe('John Doe');
+      expect(setOps.find(op => op.atom === testAtoms.ageAtom)?.value).toBe(30);
+
+      // Act - Second hydration
+      const secondResult = await hydrateFromEncodedBlob(secondBlob, registry, {
+        logger,
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Check second hydration result
+      expect(secondResult.overallSuccess).toBe(true);
+      expect(secondResult.sections.settings).toEqual({
+        success: true,
+        appliedFields: ['theme', 'notifications'],
+      });
+      // user section should not be present in second result
+      expect(secondResult.sections.user).toBeUndefined();
+
+      // Verify all atoms after second hydration
+      setOps = atomStore.getSetOperations();
+      expect(setOps).toHaveLength(4); // Should have all 4 atom sets
+      
+      // User atoms should still have their values
+      expect(setOps.find(op => op.atom === testAtoms.nameAtom)?.value).toBe('John Doe');
+      expect(setOps.find(op => op.atom === testAtoms.ageAtom)?.value).toBe(30);
+      
+      // Settings atoms should have their values
+      expect(setOps.find(op => op.atom === testAtoms.themeAtom)?.value).toBe('dark');
+      expect(setOps.find(op => op.atom === testAtoms.notificationsAtom)?.value).toBe(true);
+    });
+
+    it('should handle overlapping sections in multiple hydrations', async () => {
+      // Arrange
+      const userSchema = z.object({
+        name: z.string(),
+        age: z.number(),
+        email: z.string().optional(),
+      });
+
+      const registry: HydrationRegistry = {
+        user: {
+          schema: userSchema,
+          atoms: {
+            name: testAtoms.nameAtom,
+            age: testAtoms.ageAtom,
+            email: testAtoms.emailAtom,
+          },
+        },
+      };
+
+      // First hydration with partial user data
+      const firstData = {
+        user: {
+          name: 'Initial Name',
+          age: 25,
+        },
+      };
+      const firstBlob = createHydrationBlob(firstData);
+
+      // Second hydration with overlapping and new data
+      const secondData = {
+        user: {
+          name: 'Updated Name', // This will overwrite
+          age: 26, // This will overwrite
+          email: 'user@example.com', // This is new
+        },
+      };
+      const secondBlob = createHydrationBlob(secondData);
+
+      // Act - First hydration
+      await hydrateFromEncodedBlob(firstBlob, registry, {
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Act - Second hydration
+      await hydrateFromEncodedBlob(secondBlob, registry, {
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Assert - Check final atom values
+      const setOps = atomStore.getSetOperations();
+      
+      // Find the last set operation for each atom
+      const nameOps = setOps.filter(op => op.atom === testAtoms.nameAtom);
+      const ageOps = setOps.filter(op => op.atom === testAtoms.ageAtom);
+      const emailOps = setOps.filter(op => op.atom === testAtoms.emailAtom);
+
+      // Values should reflect the second hydration
+      expect(nameOps[nameOps.length - 1]?.value).toBe('Updated Name');
+      expect(ageOps[ageOps.length - 1]?.value).toBe(26);
+      expect(emailOps[emailOps.length - 1]?.value).toBe('user@example.com');
+    });
+
+    it('should handle partial hydration with mixed sections', async () => {
+      // Arrange
+      const userSchema = z.object({
+        name: z.string(),
+        preferences: z.object({
+          theme: z.string(),
+          language: z.string(),
+        }),
+      });
+
+      const settingsSchema = z.object({
+        notifications: z.boolean(),
+        autoSave: z.boolean(),
+      });
+
+      const registry: HydrationRegistry = {
+        user: {
+          schema: userSchema,
+          atoms: {
+            name: testAtoms.nameAtom,
+            preferences: testAtoms.preferencesAtom,
+          },
+        },
+        settings: {
+          schema: settingsSchema,
+          atoms: {
+            notifications: testAtoms.notificationsAtom,
+            autoSave: testAtoms.autoSaveAtom,
+          },
+        },
+      };
+
+      // Three separate hydration passes
+      const blob1 = createHydrationBlob({
+        user: {
+          name: 'Alice',
+          preferences: { theme: 'light', language: 'en' },
+        },
+      });
+
+      const blob2 = createHydrationBlob({
+        settings: {
+          notifications: true,
+          autoSave: false,
+        },
+      });
+
+      const blob3 = createHydrationBlob({
+        user: {
+          name: 'Alice',
+          preferences: { theme: 'dark', language: 'en' }, // Theme updated
+        },
+      });
+
+      // Act - Multiple hydrations
+      const result1 = await hydrateFromEncodedBlob(blob1, registry, {
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      const result2 = await hydrateFromEncodedBlob(blob2, registry, {
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      const result3 = await hydrateFromEncodedBlob(blob3, registry, {
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Assert
+      expect(result1.overallSuccess).toBe(true);
+      expect(result2.overallSuccess).toBe(true);
+      expect(result3.overallSuccess).toBe(true);
+
+      // Check final state
+      const setOps = atomStore.getSetOperations();
+      
+      const prefsOps = setOps.filter(op => op.atom === testAtoms.preferencesAtom);
+      const latestPrefs = prefsOps[prefsOps.length - 1]?.value;
+      
+      expect(latestPrefs).toEqual({ theme: 'dark', language: 'en' });
+      
+      // Settings should remain unchanged from blob2
+      expect(setOps.find(op => op.atom === testAtoms.notificationsAtom)?.value).toBe(true);
+      expect(setOps.find(op => op.atom === testAtoms.autoSaveAtom)?.value).toBe(false);
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle empty registry', async () => {
       // Arrange

@@ -25,7 +25,7 @@ describe('bootstrapHydration', () => {
       
       // Create mock window
       globalThis.window = {
-        __HYDRATION_BLOB__: undefined,
+        __HYDRATION_BLOBS__: undefined,
         __HYDRATION_RESULT__: undefined,
         location: {
           href: 'http://localhost:3000/',
@@ -67,7 +67,7 @@ describe('bootstrapHydration', () => {
       } as any);
 
       expect(result).toBeUndefined();
-      expect(mockLogger.infoCalls).toContainEqual(['No hydration blob found, skipping hydration']);
+      expect(mockLogger.infoCalls).toContainEqual(['No hydration blobs found, skipping hydration']);
     });
 
     it('should use blob from options when provided', async () => {
@@ -98,7 +98,7 @@ describe('bootstrapHydration', () => {
       expect(setOps[0].value).toBe('Test User');
     });
 
-    it('should discover blob from window.__HYDRATION_BLOB__', async () => {
+    it('should discover blob from window.__HYDRATION_BLOBS__', async () => {
       const ageAtom = createMockSyncAtom(0);
       const registry: HydrationRegistry = {
         user: {
@@ -107,9 +107,10 @@ describe('bootstrapHydration', () => {
         }
       };
 
-      // Set blob on window
+      // Set blobs array on window
       const testData = { user: { age: 25 } };
-      window.__HYDRATION_BLOB__ = btoa(JSON.stringify(testData));
+      const blob = btoa(JSON.stringify(testData));
+      window.__HYDRATION_BLOBS__ = [{ blob, storageKey: `__hydration_test` }];
 
       const result = await bootstrapHydration(registry, {
         logger: mockLogger,
@@ -317,7 +318,7 @@ describe('bootstrapHydration', () => {
 
       expect(result).toBeDefined();
       expect(result?.overallSuccess).toBe(true);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from URL parameter "hydrate"']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from URL parameter "hydrate"']);
       
       // Check atom was set
       const setOps = mockStore.getSetOperations();
@@ -344,7 +345,7 @@ describe('bootstrapHydration', () => {
       const urlBlob = btoa(JSON.stringify(urlData));
       
       // Set window and URL blobs
-      window.__HYDRATION_BLOB__ = windowBlob;
+      window.__HYDRATION_BLOBS__ = [{ blob: windowBlob, storageKey: '__hydration_precedence_window' }];
       window.location.href = `http://localhost:3000/?hydrate=${urlBlob}`;
 
       // Test 1: Option should take precedence over everything
@@ -355,7 +356,7 @@ describe('bootstrapHydration', () => {
       } as any);
 
       expect(result?.overallSuccess).toBe(true);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from explicit option']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from explicit option']);
       let setOps = mockStore.getSetOperations();
       expect(setOps[setOps.length - 1].value).toBe('Option User');
 
@@ -370,14 +371,14 @@ describe('bootstrapHydration', () => {
       } as any);
 
       expect(result?.overallSuccess).toBe(true);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from window.__HYDRATION_BLOB__']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from window.__HYDRATION_BLOBS__']);
       setOps = mockStore.getSetOperations();
       expect(setOps[setOps.length - 1].value).toBe('Window User');
 
       // Reset and remove window blob
       mockStore.clear();
       mockLogger.clear();
-      delete window.__HYDRATION_BLOB__;
+      delete window.__HYDRATION_BLOBS__;
 
       // Test 3: URL should be used when no option or window
       result = await bootstrapHydration(registry, {
@@ -386,7 +387,7 @@ describe('bootstrapHydration', () => {
       } as any);
 
       expect(result?.overallSuccess).toBe(true);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from URL parameter "hydrate"']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from URL parameter "hydrate"']);
       setOps = mockStore.getSetOperations();
       expect(setOps[setOps.length - 1].value).toBe('URL User');
     });
@@ -410,7 +411,7 @@ describe('bootstrapHydration', () => {
 
       expect(result).toBeUndefined();
       expect(mockLogger.warnCalls).toContainEqual(['Failed to parse URL for hydrate parameter', expect.any(Error)]);
-      expect(mockLogger.infoCalls).toContainEqual(['No hydration blob found, skipping hydration']);
+      expect(mockLogger.infoCalls).toContainEqual(['No hydration blobs found, skipping hydration']);
     });
 
     it('should handle URL with multiple parameters correctly', async () => {
@@ -434,7 +435,7 @@ describe('bootstrapHydration', () => {
 
       expect(result).toBeDefined();
       expect(result?.overallSuccess).toBe(true);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from URL parameter "hydrate"']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from URL parameter "hydrate"']);
       
       // Check atom was set correctly
       const setOps = mockStore.getSetOperations();
@@ -460,7 +461,7 @@ describe('bootstrapHydration', () => {
       } as any);
 
       expect(result).toBeUndefined();
-      expect(mockLogger.infoCalls).toContainEqual(['No hydration blob found, skipping hydration']);
+      expect(mockLogger.infoCalls).toContainEqual(['No hydration blobs found, skipping hydration']);
     });
 
     it('should handle malformed base64 in URL parameter', async () => {
@@ -482,7 +483,7 @@ describe('bootstrapHydration', () => {
 
       expect(result).toBeDefined();
       expect(result?.overallSuccess).toBe(false);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from URL parameter "hydrate"']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from URL parameter "hydrate"']);
       
       // Check that an error was logged during decoding
       expect(mockLogger.errorCalls.length).toBeGreaterThan(0);
@@ -513,7 +514,7 @@ describe('bootstrapHydration', () => {
 
       expect(result).toBeDefined();
       expect(result?.overallSuccess).toBe(true);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from URL parameter "hydrate"']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from URL parameter "hydrate"']);
       
       // Check atom was set with special characters preserved
       const setOps = mockStore.getSetOperations();
@@ -539,7 +540,7 @@ describe('bootstrapHydration', () => {
       } as any);
 
       expect(result).toBeUndefined();
-      expect(mockLogger.infoCalls).toContainEqual(['No hydration blob found, skipping hydration']);
+      expect(mockLogger.infoCalls).toContainEqual(['No hydration blobs found, skipping hydration']);
     });
 
     it('should properly log which source was used for blob discovery', async () => {
@@ -561,28 +562,28 @@ describe('bootstrapHydration', () => {
         logger: mockLogger,
         _testStore: mockStore
       } as any);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from explicit option']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from explicit option']);
 
       // Test 2: Window global
       mockLogger.clear();
       mockStore.clear();
-      window.__HYDRATION_BLOB__ = testBlob;
+      window.__HYDRATION_BLOBS__ = [{ blob: testBlob, storageKey: '__hydration_test' }];
       await bootstrapHydration(registry, {
         logger: mockLogger,
         _testStore: mockStore
       } as any);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from window.__HYDRATION_BLOB__']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from window.__HYDRATION_BLOBS__']);
 
       // Test 3: URL parameter
       mockLogger.clear();
       mockStore.clear();
-      delete window.__HYDRATION_BLOB__;
+      delete window.__HYDRATION_BLOBS__;
       window.location.href = `http://localhost:3000/?hydrate=${testBlob}`;
       await bootstrapHydration(registry, {
         logger: mockLogger,
         _testStore: mockStore
       } as any);
-      expect(mockLogger.infoCalls).toContainEqual(['Found hydration blob from URL parameter "hydrate"']);
+      expect(mockLogger.infoCalls).toContainEqual(['Found 1 hydration blob(s) from URL parameter "hydrate"']);
     });
   });
 
@@ -600,7 +601,7 @@ describe('bootstrapHydration', () => {
       
       // Create mock window
       globalThis.window = {
-        __HYDRATION_BLOB__: undefined,
+        __HYDRATION_BLOBS__: undefined,
         __HYDRATION_RESULT__: undefined,
         location: {
           href: 'http://localhost:3000/',

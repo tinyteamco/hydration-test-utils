@@ -197,6 +197,120 @@ test.describe('Hydration Test Utils E2E', () => {
     );
   });
 
+  test('should support multiple preparePageForHydration calls before navigation', async ({ page }) => {
+    // Simulate multiple test setup stages that don't know about each other
+    
+    // Test setup stage 1: User profile setup
+    await preparePageForHydration(page, {
+      userProfile: {
+        name: 'Multi Stage User',
+        email: 'multi@example.com',
+        age: 35,
+      },
+    });
+
+    // Test setup stage 2: Settings setup (isolated, doesn't know about stage 1)
+    await preparePageForHydration(page, {
+      settings: {
+        theme: 'dark',
+        notificationsEnabled: false,
+      },
+    });
+
+    // Navigate to the page - both hydrations should be applied
+    await page.goto('/');
+    
+    // Wait for hydration result
+    const result = await getHydrationResult(page);
+    
+    // Both sections should be hydrated successfully
+    expect(result.overallSuccess).toBe(true);
+    expect(result.sections.userProfile.success).toBe(true);
+    expect(result.sections.settings.success).toBe(true);
+
+    // Verify both hydrations were applied
+    await expect(page.getByTestId('user-name-value')).toHaveText('Multi Stage User');
+    await expect(page.getByTestId('user-email-value')).toHaveText('multi@example.com');
+    await expect(page.getByTestId('theme-value')).toHaveText('dark');
+    await expect(page.locator('.app')).toHaveClass(/dark/);
+  });
+
+  test('should handle overlapping data in multiple setup stages', async ({ page }) => {
+    // Stage 1: Initial user setup
+    await preparePageForHydration(page, {
+      userProfile: {
+        name: 'Initial Name',
+        email: 'initial@example.com',
+        age: 25,
+      },
+    });
+
+    // Stage 2: Update some user data and add settings
+    await preparePageForHydration(page, {
+      userProfile: {
+        name: 'Updated Name', // This should overwrite
+        email: 'updated@example.com', // This should overwrite
+        age: 26, // This should overwrite
+      },
+      settings: {
+        theme: 'light',
+        notificationsEnabled: true,
+      },
+    });
+
+    // Navigate and check results
+    await page.goto('/');
+    const result = await getHydrationResult(page);
+    
+    expect(result.overallSuccess).toBe(true);
+
+    // Later values should win
+    await expect(page.getByTestId('user-name-value')).toHaveText('Updated Name');
+    await expect(page.getByTestId('user-email-value')).toHaveText('updated@example.com');
+    await expect(page.getByTestId('user-age-value')).toHaveText('26');
+    await expect(page.getByTestId('theme-value')).toHaveText('light');
+  });
+
+  test('should aggregate errors from multiple hydration stages', async ({ page }) => {
+    // Stage 1: Valid user data
+    await preparePageForHydration(page, {
+      userProfile: {
+        name: 'Valid User',
+        email: 'valid@example.com',
+        age: 30,
+      },
+    });
+
+    // Stage 2: Invalid settings data
+    await preparePageForHydration(page, {
+      settings: {
+        theme: 'invalid-theme' as any, // Invalid enum value
+        notificationsEnabled: 'not-a-boolean' as any,
+      },
+    });
+
+    // Navigate
+    await page.goto('/');
+
+    // getHydrationResult should throw because hydration failed
+    let error: any;
+    try {
+      await getHydrationResult(page);
+      expect(true).toBe(false); // Should not reach here
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeDefined();
+    expect(error.message).toContain('Hydration failed');
+    
+    // The aggregated result should show success for userProfile but failure for settings
+    const result = error.hydrationResult;
+    expect(result.overallSuccess).toBe(false);
+    expect(result.sections.userProfile.success).toBe(true);
+    expect(result.sections.settings.success).toBe(false);
+  });
+
   test('should throw detailed error when hydration fails', async ({ page }) => {
     const hydrationData = {
       userProfile: {

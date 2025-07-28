@@ -35,16 +35,20 @@ export async function preparePageForHydration(
 
   await page.addInitScript(
     ({ blob, storageKey }) => {
-      // Check if we've already hydrated this specific blob
-      const alreadyHydrated = localStorage.getItem(storageKey);
-      
-      if (!alreadyHydrated) {
-        // First time hydrating this blob
-        window.__HYDRATION_BLOB__ = blob;
+      // Initialize array if it doesn't exist
+      if (!window.__HYDRATION_BLOBS__) {
+        window.__HYDRATION_BLOBS__ = [];
       }
-      // If already hydrated, do nothing - let persisted data load naturally
-      // Always set the storage key for debugging
-      window.__HYDRATION_STORAGE_KEY__ = storageKey;
+      
+      // Check if we've already added this specific blob (by hash)
+      const alreadyAdded = window.__HYDRATION_BLOBS__.some(
+        (item: any) => item.storageKey === storageKey
+      );
+      
+      if (!alreadyAdded) {
+        // Add this blob to the array (maintains order: oldest to newest)
+        window.__HYDRATION_BLOBS__.push({ blob, storageKey });
+      }
     },
     { blob, storageKey },
   );
@@ -138,8 +142,7 @@ export async function hydratePage(
 // Augment the global window interface for the init scripts
 declare global {
   interface Window {
-    __HYDRATION_BLOB__?: string;
+    __HYDRATION_BLOBS__?: Array<{ blob: string; storageKey: string }>;
     __HYDRATION_RESULT__?: HydrationResult;
-    __HYDRATION_STORAGE_KEY__?: string;
   }
 }

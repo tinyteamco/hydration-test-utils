@@ -5,7 +5,8 @@ import {
   userAgeAtom,
   themeAtom,
   notificationsEnabledAtom,
-  hydrationStatusAtom
+  hydrationStatusAtom,
+  appStateAtom
 } from './atoms'
 import './App.css'
 
@@ -16,6 +17,7 @@ export default function App() {
   const [theme, setTheme] = useAtom(themeAtom)
   const [notificationsEnabled, setNotificationsEnabled] = useAtom(notificationsEnabledAtom)
   const [hydrationStatus] = useAtom(hydrationStatusAtom)
+  const [appState, setAppState] = useAtom(appStateAtom)
 
   return (
     <div className={`app ${theme}`}>
@@ -111,6 +113,76 @@ export default function App() {
         </div>
       </section>
 
+      <section className="app-state">
+        <h2>App State (Object-Storing Atom)</h2>
+        <div className="form-group">
+          <label>Current Page:</label>
+          <select
+            value={appState.navigation.currentPage}
+            onChange={(e) => setAppState({
+              ...appState,
+              navigation: { ...appState.navigation, currentPage: e.target.value }
+            })}
+            data-testid="current-page-select"
+          >
+            <option value="home">Home</option>
+            <option value="profile">Profile</option>
+            <option value="settings">Settings</option>
+          </select>
+          <span data-testid="current-page-value">{appState.navigation.currentPage}</span>
+        </div>
+        
+        <div className="form-group">
+          <label>Page History:</label>
+          <span data-testid="page-history">{appState.navigation.history.join(' → ') || '(empty)'}</span>
+        </div>
+
+        <div className="form-group">
+          <h4>Features:</h4>
+          <label>
+            <input
+              type="checkbox"
+              checked={appState.features.darkModeEnabled}
+              onChange={(e) => setAppState({
+                ...appState,
+                features: { ...appState.features, darkModeEnabled: e.target.checked }
+              })}
+              data-testid="dark-mode-checkbox"
+            />
+            Dark Mode
+          </label>
+          <span data-testid="dark-mode-value">{appState.features.darkModeEnabled ? 'On' : 'Off'}</span>
+          
+          <label>
+            <input
+              type="checkbox"
+              checked={appState.features.betaFeaturesEnabled}
+              onChange={(e) => setAppState({
+                ...appState,
+                features: { ...appState.features, betaFeaturesEnabled: e.target.checked }
+              })}
+              data-testid="beta-features-checkbox"
+            />
+            Beta Features
+          </label>
+          <span data-testid="beta-features-value">{appState.features.betaFeaturesEnabled ? 'On' : 'Off'}</span>
+          
+          <label>
+            <input
+              type="checkbox"
+              checked={appState.features.analyticsEnabled}
+              onChange={(e) => setAppState({
+                ...appState,
+                features: { ...appState.features, analyticsEnabled: e.target.checked }
+              })}
+              data-testid="analytics-checkbox"
+            />
+            Analytics
+          </label>
+          <span data-testid="analytics-value">{appState.features.analyticsEnabled ? 'On' : 'Off'}</span>
+        </div>
+      </section>
+
       <section className="current-state">
         <h3>Current State Summary</h3>
         <pre data-testid="state-summary">
@@ -123,7 +195,8 @@ export default function App() {
   settings: {
     theme,
     notificationsEnabled
-  }
+  },
+  appState: appState
 }, null, 2)}
         </pre>
       </section>

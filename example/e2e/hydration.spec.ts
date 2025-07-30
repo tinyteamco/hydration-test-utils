@@ -311,6 +311,87 @@ test.describe('Hydration Test Utils E2E', () => {
     expect(result.sections.settings.success).toBe(false);
   });
 
+  test('should support object-storing atoms', async ({ page }) => {
+    // This test demonstrates modern Jotai patterns where related state
+    // is stored in a single atom as an object
+    const hydrationData = {
+      // Traditional flat atoms
+      userProfile: {
+        name: 'Test User',
+        email: 'test@example.com',
+        age: 25,
+      },
+      // Object-storing atom: entire object goes to single atom
+      appState: {
+        navigation: {
+          currentPage: 'settings',
+          history: ['home', 'profile', 'settings']
+        },
+        features: {
+          darkModeEnabled: true,
+          betaFeaturesEnabled: true,
+          analyticsEnabled: false
+        }
+      }
+    };
+
+    const result = await hydratePage(page, { data: hydrationData });
+
+    // Verify hydration succeeded
+    expect(result.overallSuccess).toBe(true);
+    expect(result.sections.userProfile.success).toBe(true);
+    expect(result.sections.appState.success).toBe(true);
+    
+    // Verify traditional flat atoms work
+    await expect(page.getByTestId('user-name-value')).toHaveText('Test User');
+    
+    // Verify object-storing atom data is displayed correctly
+    await expect(page.getByTestId('current-page-value')).toHaveText('settings');
+    await expect(page.getByTestId('page-history')).toHaveText('home → profile → settings');
+    await expect(page.getByTestId('dark-mode-value')).toHaveText('On');
+    await expect(page.getByTestId('beta-features-value')).toHaveText('On');
+    await expect(page.getByTestId('analytics-value')).toHaveText('Off');
+  });
+
+  test('should support multiple hydrations with object-storing atoms', async ({ page }) => {
+    // First hydration: User profile only
+    await preparePageForHydration(page, {
+      userProfile: {
+        name: 'Initial User',
+        email: 'initial@example.com',
+        age: 30,
+      },
+    });
+
+    // Second hydration: App state (object-storing atom)
+    await preparePageForHydration(page, {
+      appState: {
+        navigation: {
+          currentPage: 'profile',
+          history: ['home', 'profile']
+        },
+        features: {
+          darkModeEnabled: false,
+          betaFeaturesEnabled: true,
+          analyticsEnabled: true
+        }
+      }
+    });
+
+    // Navigate and verify both hydrations applied
+    await page.goto('/');
+    const result = await getHydrationResult(page);
+    
+    expect(result.overallSuccess).toBe(true);
+    expect(result.sections.userProfile.success).toBe(true);
+    expect(result.sections.appState.success).toBe(true);
+
+    // Verify data from both hydrations
+    await expect(page.getByTestId('user-name-value')).toHaveText('Initial User');
+    await expect(page.getByTestId('current-page-value')).toHaveText('profile');
+    await expect(page.getByTestId('beta-features-value')).toHaveText('On');
+  });
+
   test('should throw detailed error when hydration fails', async ({ page }) => {
     const hydrationData = {
       userProfile: {

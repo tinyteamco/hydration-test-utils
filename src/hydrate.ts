@@ -110,25 +110,54 @@ export async function hydrateFromEncodedBlob(
       continue;
     }
 
-    // Step 4: Check strict mode constraints
+    // Step 4: Detect if this is an object-storing atom pattern
     const atomKeys = Object.keys(registryEntry.atoms);
+    let isObjectStoringPattern = false;
     
-    if (strict) {
-      // Extract schema keys from Zod schema
-      let schemaKeys: string[] = [];
+    // Extract schema keys from Zod schema
+    let schemaKeys: string[] = [];
+    
+    // Check if the schema has a shape property (ZodObject)
+    const schema = registryEntry.schema as any;
+    if (schema && typeof schema === 'object' && schema._def && schema._def.shape) {
+      // This is a ZodObject, we can get the keys from its shape
+      schemaKeys = Object.keys(schema._def.shape);
+    } else {
+      // Fallback: use the validated data keys as an approximation
+      // This isn't perfect but maintains backward compatibility
+      schemaKeys = Object.keys(validationResult.data);
+      logger.warn?.(`Unable to extract schema shape for section ${sectionName}, using data keys for strict validation`);
+    }
+    
+    // Detect object-storing pattern:
+    // - Single atom in the registry
+    // - Multiple fields in the schema
+    // - The single atom name should be in the persisted array (if present)
+    // - The atom name often matches or relates to the section name
+    if (atomKeys.length === 1 && schemaKeys.length > 1) {
+      const singleAtomName = atomKeys[0]!; // We know it exists since length is 1
+      // Additional validation: if persisted array exists, the atom should be in it
+      const persistedArray = registryEntry.persisted || [];
       
-      // Check if the schema has a shape property (ZodObject)
-      const schema = registryEntry.schema as any;
-      if (schema && typeof schema === 'object' && schema._def && schema._def.shape) {
-        // This is a ZodObject, we can get the keys from its shape
-        schemaKeys = Object.keys(schema._def.shape);
-      } else {
-        // Fallback: use the validated data keys as an approximation
-        // This isn't perfect but maintains backward compatibility
-        schemaKeys = Object.keys(validationResult.data);
-        logger.warn?.(`Unable to extract schema shape for section ${sectionName}, using data keys for strict validation`);
+      // For object-storing pattern, we expect:
+      // 1. If there's a persisted array, the single atom should be in it
+      // 2. The atom name often matches the section name or is semantically related
+      if (persistedArray.length === 0 || persistedArray.includes(singleAtomName)) {
+        // Also check if atom name is related to section name (common pattern)
+        const atomMatchesSection = singleAtomName === sectionName || 
+                                   singleAtomName.toLowerCase() === sectionName.toLowerCase() ||
+                                   sectionName.includes(singleAtomName) ||
+                                   singleAtomName.includes(sectionName);
+        
+        if (atomMatchesSection || persistedArray.includes(singleAtomName)) {
+          isObjectStoringPattern = true;
+          logger.info?.(`Detected object-storing atom pattern for section ${sectionName}`);
+        }
       }
-
+    }
+    
+    // Step 5: Apply strict mode validation (skip for object-storing patterns)
+    if (strict && !isObjectStoringPattern) {
       // Check for missing atoms (schema fields without corresponding atoms)
       const missingAtoms = schemaKeys.filter(key => !atomKeys.includes(key));
       if (missingAtoms.length > 0) {
@@ -156,41 +185,62 @@ export async function hydrateFromEncodedBlob(
       }
     }
 
-    // Step 5: Apply values to atoms
-    // Only process fields that are actually present in the data
-    for (const [fieldName, value] of Object.entries(validationResult.data)) {
-      // Skip undefined values (optional fields not provided)
-      if (value === undefined) {
-        continue;
-      }
-      const atom = registryEntry.atoms[fieldName];
+    // Step 6: Apply values to atoms
+    if (isObjectStoringPattern) {
+      // Object-storing pattern: set the entire validated data to the single atom
+      const atomName = atomKeys[0]!; // We know it exists since we checked length above
+      const atom = registryEntry.atoms[atomName];
       
-      if (!atom) {
-        // No atom for this field
-        if (!strict) {
-          const warning = `No atom found for field: ${fieldName}`;
-          logger.warn?.(warning);
-          if (!sectionResult.warnings) {
-            sectionResult.warnings = [];
-          }
-          sectionResult.warnings.push(warning);
-        }
-        continue;
-      }
-
-      // Set the atom value
       try {
         // Use test store if provided, otherwise use default store
         const store = testStore || getDefaultStore();
-        store.set(atom as WritableAtom<any, any[], any>, value);
+        store.set(atom as WritableAtom<any, any[], any>, validationResult.data);
         
-        sectionResult.appliedFields?.push(fieldName);
+        sectionResult.appliedFields?.push(atomName);
+        logger.info?.(`Applied entire object to atom: ${atomName}`);
       } catch (error) {
-        logger.error?.(`Failed to set atom for field ${fieldName}:`, error);
+        logger.error?.(`Failed to set object-storing atom ${atomName}:`, error);
         sectionResult.success = false;
-        sectionResult.error = `Failed to set atom for field ${fieldName}: ${(error as Error).message}`;
+        sectionResult.error = `Failed to set object-storing atom ${atomName}: ${(error as Error).message}`;
         result.overallSuccess = false;
-        break;
+      }
+    } else {
+      // Traditional flat pattern: set each field to its corresponding atom
+      // Only process fields that are actually present in the data
+      for (const [fieldName, value] of Object.entries(validationResult.data)) {
+        // Skip undefined values (optional fields not provided)
+        if (value === undefined) {
+          continue;
+        }
+        const atom = registryEntry.atoms[fieldName];
+        
+        if (!atom) {
+          // No atom for this field
+          if (!strict) {
+            const warning = `No atom found for field: ${fieldName}`;
+            logger.warn?.(warning);
+            if (!sectionResult.warnings) {
+              sectionResult.warnings = [];
+            }
+            sectionResult.warnings.push(warning);
+          }
+          continue;
+        }
+
+        // Set the atom value
+        try {
+          // Use test store if provided, otherwise use default store
+          const store = testStore || getDefaultStore();
+          store.set(atom as WritableAtom<any, any[], any>, value);
+          
+          sectionResult.appliedFields?.push(fieldName);
+        } catch (error) {
+          logger.error?.(`Failed to set atom for field ${fieldName}:`, error);
+          sectionResult.success = false;
+          sectionResult.error = `Failed to set atom for field ${fieldName}: ${(error as Error).message}`;
+          result.overallSuccess = false;
+          break;
+        }
       }
     }
 

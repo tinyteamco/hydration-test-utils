@@ -46,6 +46,30 @@ export function createTestAtoms() {
     emailAtom: createMockAtom<string>(''),
     preferencesAtom: createMockAtom<{ notifications: boolean }>({ notifications: false }),
     autoSaveAtom: createMockAtom<boolean>(true),
+    // Object-storing atoms
+    relationshipStateAtom: createMockAtom<{
+      relationships: Array<{ id: string; name: string; type: 'friend' | 'family' | 'colleague' }>;
+      currentId: string | null;
+    }>({
+      relationships: [],
+      currentId: null,
+    }),
+    userProfileAtom: createMockAtom<{
+      personal: { firstName: string; lastName: string; email: string };
+      preferences: { theme: 'light' | 'dark' | 'auto'; language: string; notifications: boolean };
+      metadata: { createdAt: string; lastLoginAt: string | null };
+    }>({
+      personal: { firstName: '', lastName: '', email: '' },
+      preferences: { theme: 'light', language: 'en', notifications: false },
+      metadata: { createdAt: '', lastLoginAt: null },
+    }),
+    appStateAtom: createMockAtom<{
+      settings: { theme: string; fontSize: number };
+      flags: { betaFeatures: boolean; analytics: boolean };
+    }>({
+      settings: { theme: 'light', fontSize: 14 },
+      flags: { betaFeatures: false, analytics: true },
+    }),
   };
 }
 

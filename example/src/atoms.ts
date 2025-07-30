@@ -15,3 +15,26 @@ export const hydrationStatusAtom = atom<{
   success: boolean
   errors: string[]
 } | null>(null)
+
+// Object-storing atom example: App state stores multiple related values
+export const appStateAtom = atomWithStorage<{
+  navigation: {
+    currentPage: string
+    history: string[]
+  }
+  features: {
+    darkModeEnabled: boolean
+    betaFeaturesEnabled: boolean
+    analyticsEnabled: boolean
+  }
+}>('appState', {
+  navigation: {
+    currentPage: 'home',
+    history: []
+  },
+  features: {
+    darkModeEnabled: false,
+    betaFeaturesEnabled: false,
+    analyticsEnabled: true
+  }
+})

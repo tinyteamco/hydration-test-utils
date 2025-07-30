@@ -1027,6 +1027,223 @@ describe('hydrateFromEncodedBlob', () => {
     });
   });
 
+  describe('object-storing atoms', () => {
+    it('should support atoms that store entire objects matching schema structure', async () => {
+      // Arrange - Modern pattern: single atom storing related state
+      const relationshipSchema = z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.enum(['friend', 'family', 'colleague']),
+      });
+
+      const relationshipStateSchema = z.object({
+        relationships: z.array(relationshipSchema),
+        currentId: z.string().nullable(),
+      });
+
+      // Single atom storing the entire state object
+      const relationshipStateAtom = testAtoms.relationshipStateAtom;
+
+      const registry: HydrationRegistry = {
+        relationshipState: {
+          schema: relationshipStateSchema,
+          atoms: {
+            relationshipState: relationshipStateAtom, // Single atom for entire object
+          },
+          persisted: ['relationshipState'],
+        },
+      };
+
+      const data = {
+        relationshipState: {
+          relationships: [
+            { id: '1', name: 'Alice', type: 'friend' },
+            { id: '2', name: 'Bob', type: 'colleague' },
+          ],
+          currentId: '1',
+        },
+      };
+
+      const blob = createHydrationBlob(data);
+
+      // Act
+      const result = await hydrateFromEncodedBlob(blob, registry, {
+        strict: true, // Should work in strict mode
+        logger,
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Assert
+      expect(result.overallSuccess).toBe(true);
+      expect(result.sections.relationshipState.success).toBe(true);
+      expect(result.sections.relationshipState.appliedFields).toEqual(['relationshipState']);
+
+      // Verify the entire object was set to the atom
+      const setOps = atomStore.getSetOperations();
+      expect(setOps).toHaveLength(1);
+      expect(setOps[0].atom).toBe(relationshipStateAtom);
+      expect(setOps[0].value).toEqual({
+        relationships: [
+          { id: '1', name: 'Alice', type: 'friend' },
+          { id: '2', name: 'Bob', type: 'colleague' },
+        ],
+        currentId: '1',
+      });
+    });
+
+    it('should detect object-storing atoms automatically based on structure', async () => {
+      // Arrange
+      const userProfileSchema = z.object({
+        personal: z.object({
+          firstName: z.string(),
+          lastName: z.string(),
+          email: z.string().email(),
+        }),
+        preferences: z.object({
+          theme: z.enum(['light', 'dark', 'auto']),
+          language: z.string(),
+          notifications: z.boolean(),
+        }),
+        metadata: z.object({
+          createdAt: z.string(),
+          lastLoginAt: z.string().nullable(),
+        }),
+      });
+
+      // Single atom storing entire user profile
+      const userProfileAtom = testAtoms.userProfileAtom;
+
+      const registry: HydrationRegistry = {
+        userProfile: {
+          schema: userProfileSchema,
+          atoms: {
+            userProfile: userProfileAtom, // Name matches section name
+          },
+          persisted: ['userProfile'],
+        },
+      };
+
+      const data = {
+        userProfile: {
+          personal: {
+            firstName: 'Jane',
+            lastName: 'Doe',
+            email: 'jane@example.com',
+          },
+          preferences: {
+            theme: 'dark',
+            language: 'en-US',
+            notifications: true,
+          },
+          metadata: {
+            createdAt: '2023-01-01T00:00:00Z',
+            lastLoginAt: '2023-12-25T10:30:00Z',
+          },
+        },
+      };
+
+      const blob = createHydrationBlob(data);
+
+      // Act
+      const result = await hydrateFromEncodedBlob(blob, registry, {
+        logger,
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Assert
+      expect(result.overallSuccess).toBe(true);
+      expect(result.sections.userProfile.success).toBe(true);
+      
+      const setOps = atomStore.getSetOperations();
+      expect(setOps).toHaveLength(1);
+      expect(setOps[0].value).toEqual(data.userProfile);
+    });
+
+    it('should still support flat atom structures alongside object-storing atoms', async () => {
+      // Arrange - Mixed registry with both patterns
+      const flatSchema = z.object({
+        name: z.string(),
+        email: z.string(),
+      });
+
+      const objectSchema = z.object({
+        settings: z.object({
+          theme: z.string(),
+          fontSize: z.number(),
+        }),
+        flags: z.object({
+          betaFeatures: z.boolean(),
+          analytics: z.boolean(),
+        }),
+      });
+
+      const registry: HydrationRegistry = {
+        // Traditional flat structure
+        user: {
+          schema: flatSchema,
+          atoms: {
+            name: testAtoms.nameAtom,
+            email: testAtoms.emailAtom,
+          },
+        },
+        // Object-storing atom
+        appState: {
+          schema: objectSchema,
+          atoms: {
+            appState: testAtoms.appStateAtom,
+          },
+          persisted: ['appState'],
+        },
+      };
+
+      const data = {
+        user: {
+          name: 'John Smith',
+          email: 'john@example.com',
+        },
+        appState: {
+          settings: {
+            theme: 'light',
+            fontSize: 14,
+          },
+          flags: {
+            betaFeatures: true,
+            analytics: false,
+          },
+        },
+      };
+
+      const blob = createHydrationBlob(data);
+
+      // Act
+      const result = await hydrateFromEncodedBlob(blob, registry, {
+        // @ts-expect-error - passing test store for testing
+        _testStore: atomStore,
+      });
+
+      // Assert
+      expect(result.overallSuccess).toBe(true);
+      
+      // Check flat structure section
+      expect(result.sections.user.success).toBe(true);
+      expect(result.sections.user.appliedFields).toEqual(['name', 'email']);
+      
+      // Check object-storing section
+      expect(result.sections.appState.success).toBe(true);
+      expect(result.sections.appState.appliedFields).toEqual(['appState']);
+
+      // Verify atoms
+      const setOps = atomStore.getSetOperations();
+      expect(setOps).toHaveLength(3); // 2 flat + 1 object
+      
+      expect(setOps.find(op => op.atom === testAtoms.nameAtom)?.value).toBe('John Smith');
+      expect(setOps.find(op => op.atom === testAtoms.emailAtom)?.value).toBe('john@example.com');
+      expect(setOps.find(op => op.atom === testAtoms.appStateAtom)?.value).toEqual(data.appState);
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle empty registry', async () => {
       // Arrange
